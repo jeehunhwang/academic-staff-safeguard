@@ -14,8 +14,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-ART = Path("artifacts")
-DATA = Path("data")
+BASE = Path(__file__).parent      # the Dashboard/ folder, wherever it's launched from
+ART = BASE / "artifacts"
+DATA = BASE / "Data"
 TARGET = "TARGET_STAFF_CUT"
 VULN = "TARGET_VULNERABLE_TOTAL"
 
