@@ -177,26 +177,23 @@ elif page == "Hyperparameter tuning":
         st.warning("Run train_and_export.py first.")
     else:
         st.subheader("Best configuration per model")
-        st.caption("Selected by 10-fold cross-validated PR-AUC via grid search "
-                   "(refit on the full training set).")
+        st.caption("Hyperparameters chosen by grid search; the score shown is each "
+                   "model's PR-AUC on the held-out 2022 test set.")
         st.dataframe(bp, use_container_width=True, hide_index=True)
 
-        st.subheader("Random Forest tuning curves")
-        c1, c2, c3 = st.columns(3)
-        mtry, ntree, oob = art("rf_mtry_sweep.csv"), art("rf_ntree_sweep.csv"), art("rf_oob_curve.csv")
+        st.subheader("Random Forest tuning curves (2022 test PR-AUC)")
+        c1, c2 = st.columns(2)
+        mtry, ntree = art("rf_mtry_sweep.csv"), art("rf_ntree_sweep.csv")
         if mtry is not None:
-            c1.plotly_chart(px.line(mtry, x="max_features", y="cv_pr_auc", markers=True,
+            c1.plotly_chart(px.line(mtry, x="max_features", y="test_pr_auc", markers=True,
                                     title="mtry sweep"), use_container_width=True)
         if ntree is not None:
-            c2.plotly_chart(px.line(ntree, x="n_estimators", y="cv_pr_auc", markers=True,
-                                    title="trees vs CV PR-AUC"), use_container_width=True)
-        if oob is not None:
-            fig = px.line(oob, x="n_estimators", y="oob_pr_auc", markers=True,
-                          title="OOB PR-AUC")
+            fig = px.line(ntree, x="n_estimators", y="test_pr_auc", markers=True,
+                          title="trees vs test PR-AUC")
             fig.add_vline(x=500, line_dash="dash", annotation_text="chosen: 500")
-            c3.plotly_chart(fig, use_container_width=True)
-        st.caption("More trees stop helping past ~300; 500 is chosen for a stable margin. "
-                   "The out-of-bag curve estimates this without a validation set.")
+            c2.plotly_chart(fig, use_container_width=True)
+        st.caption("Both curves are scored on the 2022 test set. More trees stop helping "
+                   "past ~300; 500 is chosen for a stable margin.")
 
 
 # =================== RANDOM FOREST INTERPRETATION ===================
@@ -270,17 +267,3 @@ elif page == "Risk scorer":
                              {"range": [33, 66], "color": "#FCF8E3"},
                              {"range": [66, 100], "color": "#F2DEDE"}]})),
             use_container_width=True)
-
-        with st.expander("Why this score? (SHAP)"):
-            try:
-                import shap
-                sv = shap.TreeExplainer(model).shap_values(x.values.reshape(1, -1))
-                sv = sv[1] if isinstance(sv, list) else sv
-                contrib = pd.DataFrame({"feature": feats, "shap": np.ravel(sv)})
-                contrib = contrib.reindex(contrib["shap"].abs().sort_values(ascending=False).index).head(12)
-                st.plotly_chart(px.bar(contrib.sort_values("shap"), x="shap", y="feature",
-                                       orientation="h", color="shap",
-                                       color_continuous_scale="RdBu_r"),
-                                use_container_width=True)
-            except Exception as e:
-                st.info(f"SHAP unavailable: {e}")
