@@ -93,9 +93,15 @@ if FULL_SEARCH:
         rf_grid)
     models["Random Forest"] = g_rf.best_estimator_
     best_params["Random Forest"] = (str(g_rf.best_params_), float(g_rf.best_score_))
-    pd.DataFrame({"max_features": [pp["max_features"] for pp in g_rf.cv_results_["params"]],
-                  "cv_pr_auc": g_rf.cv_results_["mean_test_score"]}
-                 ).sort_values("max_features").to_csv(OUT / "rf_mtry_sweep.csv", index=False)
+    # mtry sweep scored on the 2022 TEST set (each forest fit on train, evaluated on test)
+    mtry_rows = []
+    for mf in rf_grid["max_features"]:
+        m = RandomForestClassifier(n_estimators=500, max_features=mf, max_depth=12,
+                                   min_samples_leaf=10, class_weight="balanced",
+                                   n_jobs=-1, random_state=SEED).fit(X_train, y_train)
+        mtry_rows.append((mf, float(average_precision_score(y_test, m.predict_proba(X_test)[:, 1]))))
+    pd.DataFrame(mtry_rows, columns=["max_features", "test_pr_auc"]).to_csv(
+        OUT / "rf_mtry_sweep.csv", index=False)
 
     try:
         from xgboost import XGBClassifier
@@ -130,22 +136,15 @@ models["Random Forest"] = rf_final          # the selected model (notebook cell 
 if "Random Forest" not in best_params:
     best_params["Random Forest"] = ("max_features=15, max_depth=12, min_samples_leaf=10", np.nan)
 
-# ---- RF tuning curves (ntree + OOB) ----
-ntree = [(n, float(cross_val_score(
-    RandomForestClassifier(n_estimators=n, max_depth=12, min_samples_leaf=10,
-                           class_weight="balanced", n_jobs=-1, random_state=SEED),
-    X_train, y_train, cv=CV, scoring=SCORING).mean()))
-    for n in [100, 200, 300, 400, 500, 800]]
-pd.DataFrame(ntree, columns=["n_estimators", "cv_pr_auc"]).to_csv(OUT / "rf_ntree_sweep.csv", index=False)
-
-oob = []
-for n in [25, 50, 100, 200, 300, 400, 500, 625]:
+# ---- RF ntree tuning curve, scored on the 2022 TEST set ----
+ntree = []
+for n in [100, 200, 300, 400, 500, 800]:
     m = RandomForestClassifier(n_estimators=n, max_features=15, max_depth=12,
                                min_samples_leaf=10, class_weight="balanced",
-                               oob_score=True, n_jobs=-1, random_state=SEED).fit(X_train, y_train)
-    op = m.oob_decision_function_[:, 1]; ok = ~np.isnan(op)
-    oob.append((n, float(average_precision_score(y_train[ok], op[ok]))))
-pd.DataFrame(oob, columns=["n_estimators", "oob_pr_auc"]).to_csv(OUT / "rf_oob_curve.csv", index=False)
+                               n_jobs=-1, random_state=SEED).fit(X_train, y_train)
+    ntree.append((n, float(average_precision_score(y_test, m.predict_proba(X_test)[:, 1]))))
+pd.DataFrame(ntree, columns=["n_estimators", "test_pr_auc"]).to_csv(
+    OUT / "rf_ntree_sweep.csv", index=False)
 
 # ---- comparison: fold scores, valid/test per model, paired t-test ----
 fold_scores = {n: cross_val_score(m, X_train, y_train, cv=CV, scoring=SCORING, n_jobs=-1)
@@ -167,8 +166,11 @@ means = pd.Series({k: v.mean() for k, v in fold_scores.items()})
 cv_best = means.idxmax(); runner = means.drop(cv_best).idxmax()
 _, pval = stats.ttest_rel(fold_scores[cv_best], fold_scores[runner])
 
-pd.DataFrame([(k, v[0], round(v[1], 3) if v[1] == v[1] else "—") for k, v in best_params.items()],
-             columns=["Model", "Best hyperparameters found", "CV PR-AUC"]
+bp_rows = []
+for k, v in best_params.items():
+    test_score = split_stats.loc[k, "test_PR_AUC"] if k in split_stats.index else np.nan
+    bp_rows.append((k, v[0], round(float(test_score), 3) if test_score == test_score else "—"))
+pd.DataFrame(bp_rows, columns=["Model", "Best hyperparameters found", "Test PR-AUC (2022)"]
              ).to_csv(OUT / "best_params.csv", index=False)
 
 # ---- final RF: metrics, importances, predictions, case profile ----
