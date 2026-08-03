@@ -1,0 +1,13 @@
+feature,z_score,raw_value,direction
+ENROLL_YOY,-0.46,-0.16,below average
+ENROLL_UG_YOY,-0.5,-0.16,below average
+ENROLL_3Y_TREND,-2.05,-0.072,below average
+EAP_INST_TENURETRACK,-0.28,— (imputed),below average
+RET_PCF,-2.55,48,below average
+SFTEBFO,-0.44,5,below average
+STAFF_YOY,-1.37,-0.107,below average
+EF_GRADUATE,-0.32,— (imputed),below average
+F1C071,-0.69,"1,942,844",below average
+F1B05,-0.51,0,below average
+F1E06,-0.5,"692,253",below average
+F1E03,-0.46,"130,629",below average
